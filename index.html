@@ -1,13 +1,14 @@
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>音樂播放器（含 metadata）</title>
+  <title>專業級音樂播放器</title>
   <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
   <style>
     body {
       font-family: DFKai-SB, sans-serif;
-      background-color: #c0f4f4;
+      background: linear-gradient(to bottom, #c0f4f4, #e0ffff);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -21,6 +22,7 @@
       max-width: 400px;
       text-align: center;
       color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     select, audio {
       width: 100%;
@@ -28,18 +30,29 @@
     }
     #metadata p {
       margin: 5px 0;
+      text-align: left;
+    }
+    #cover {
+      width: 100%;
+      max-width: 300px;
+      height: auto;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      object-fit: cover;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
   </style>
 </head>
 <body>
   <div id="player-container">
-    <h1>🎶音樂播放器</h1>
+    <h1>🎶 音樂播放器</h1>
+    <img id="cover" src="" alt="封面圖" style="display:none;" />
     <h2 id="media-title">請選擇曲目</h2>
 
     <div id="metadata">
-      <p align="left"><strong>標題:</strong> <span id="meta-title">-</span></p>
-      <p align="left"><strong>專輯:</strong> <span id="meta-album">-</span></p>
-      <p align="left"><strong>藝術家:</strong> <span id="meta-artist">-</span></p>
+      <p><strong>標題:</strong> <span id="meta-title">-</span></p>
+      <p><strong>專輯:</strong> <span id="meta-album">-</span></p>
+      <p><strong>藝術家:</strong> <span id="meta-artist">-</span></p>
     </div>
 
     <select id="track-selector"></select>
@@ -53,10 +66,10 @@
     const trackSelector = document.getElementById('track-selector');
     const audioPlayer = document.getElementById('audio-player');
     const mediaTitle = document.getElementById('media-title');
-
     const metaTitle = document.getElementById('meta-title');
     const metaAlbum = document.getElementById('meta-album');
     const metaArtist = document.getElementById('meta-artist');
+    const coverImage = document.getElementById('cover');
 
     async function loadPlaylist() {
       try {
@@ -93,6 +106,8 @@
       metaTitle.textContent = '-';
       metaAlbum.textContent = '-';
       metaArtist.textContent = '-';
+      coverImage.style.display = 'none';
+      coverImage.src = '';
 
       fetch(filePath)
         .then(res => res.blob())
@@ -104,6 +119,15 @@
               metaAlbum.textContent = tags.album || '(無專輯)';
               metaArtist.textContent = tags.artist || '(無藝術家)';
               if (tags.title) mediaTitle.textContent = tags.title;
+
+              if (tags.picture) {
+                const { data, format } = tags.picture;
+                const byteArray = new Uint8Array(data);
+                const blob = new Blob([byteArray], { type: format });
+                const url = URL.createObjectURL(blob);
+                coverImage.src = url;
+                coverImage.style.display = 'block';
+              }
             },
             onError: err => console.warn('Metadata 讀取失敗', err)
           });
