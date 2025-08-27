@@ -55,14 +55,23 @@
       <p><strong>藝術家:</strong> <span id="meta-artist">-</span></p>
     </div>
 
+    <!-- 新增：播放清單選擇 -->
+    <label for="playlist-selector">播放清單：</label>
+    <select id="playlist-selector"></select>
+
+    <!-- 原本：曲目選擇 -->
+    <label for="track-selector">曲目：</label>
     <select id="track-selector"></select>
+
     <audio id="audio-player" controls></audio>
   </div>
 
   <script>
-    let playlist = [];
+    let playlists = {};   // {name: [file1, file2, ...]}
+    let currentPlaylist = [];
     let currentIndex = 0;
 
+    const playlistSelector = document.getElementById('playlist-selector');
     const trackSelector = document.getElementById('track-selector');
     const audioPlayer = document.getElementById('audio-player');
     const mediaTitle = document.getElementById('media-title');
@@ -71,36 +80,35 @@
     const metaArtist = document.getElementById('meta-artist');
     const coverImage = document.getElementById('cover');
 
-    async function loadPlaylist() {
+    async function loadPlaylists() {
       try {
-        // 先嘗試讀取 playlist.json
+        // 嘗試讀取 playlist.json
         const res = await fetch('music/playlist.json');
         if (res.ok) {
           const files = await res.json();
-          playlist = files.map(file => 'music/' + file);
-          renderTrackSelector();
-          playTrack(0);
-          return;
+          playlists["預設清單"] = files.map(file => 'music/' + file);
         }
       } catch (e) {
-        console.warn("playlist.json 不存在，嘗試讀取 m3u", e);
+        console.warn("playlist.json 不存在");
       }
 
-      // 若無 playlist.json，改讀取 m3u
+      // 嘗試讀取 /music/m3u_list.json (需伺服器產生，列出資料夾內所有 m3u)
       try {
-        const res = await fetch('music/playlist.m3u');
-        if (!res.ok) throw new Error("playlist.m3u 載入失敗");
-        const text = await res.text();
-        playlist = parseM3U(text).map(file => 'music/' + file);
-        renderTrackSelector();
-        playTrack(0);
-      } catch (err) {
-        alert('找不到 playlist.json 或 playlist.m3u');
-        console.error(err);
+        const res = await fetch('music/m3u_list.json');
+        if (res.ok) {
+          const m3uFiles = await res.json(); // e.g. ["rock.m3u","jazz.m3u"]
+          for (let file of m3uFiles) {
+            const text = await fetch('music/' + file).then(r => r.text());
+            playlists[file] = parseM3U(text).map(f => 'music/' + f);
+          }
+        }
+      } catch (e) {
+        console.warn("未提供 m3u_list.json");
       }
+
+      renderPlaylistSelector();
     }
 
-    // 解析 m3u 格式
     function parseM3U(text) {
       return text
         .split('\n')
@@ -108,9 +116,31 @@
         .filter(line => line && !line.startsWith('#'));
     }
 
+    function renderPlaylistSelector() {
+      playlistSelector.innerHTML = '';
+      for (let name in playlists) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        playlistSelector.appendChild(option);
+      }
+      if (Object.keys(playlists).length > 0) {
+        playlistSelector.value = Object.keys(playlists)[0];
+        loadPlaylist(playlistSelector.value);
+      }
+    }
+
+    function loadPlaylist(name) {
+      currentPlaylist = playlists[name] || [];
+      renderTrackSelector();
+      if (currentPlaylist.length > 0) {
+        playTrack(0);
+      }
+    }
+
     function renderTrackSelector() {
       trackSelector.innerHTML = '';
-      playlist.forEach((url, i) => {
+      currentPlaylist.forEach((url, i) => {
         const option = document.createElement('option');
         option.value = i;
         option.textContent = url.split('/').pop();
@@ -121,7 +151,7 @@
 
     function playTrack(index) {
       currentIndex = index;
-      const filePath = playlist[index];
+      const filePath = currentPlaylist[index];
       audioPlayer.src = filePath;
       audioPlayer.play();
 
@@ -158,20 +188,25 @@
         .catch(err => console.warn('MP3 載入失敗', err));
     }
 
+    playlistSelector.addEventListener('change', e => {
+      loadPlaylist(e.target.value);
+    });
+
     trackSelector.addEventListener('change', e => {
       playTrack(parseInt(e.target.value));
     });
 
     audioPlayer.addEventListener('ended', () => {
-      const next = (currentIndex + 1) % playlist.length;
+      const next = (currentIndex + 1) % currentPlaylist.length;
       trackSelector.value = next;
       playTrack(next);
     });
 
-    loadPlaylist();
+    loadPlaylists();
   </script>
 </body>
 </html>
+
 
 
 
