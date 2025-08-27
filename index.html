@@ -4,28 +4,18 @@
   <title>GitHub Pages 音樂播放器</title>
   <style>
     body { font-family: sans-serif; padding: 2em; background: #f9f9f9; }
-    h1, h2, h3 { margin-top: 1em; }
-    #playlist div { cursor: pointer; padding: 5px; margin: 2px 0; background: #eee; border-radius: 4px; }
-    #playlist div:hover { background: #ddd; }
+    h1, h2 { margin-top: 1em; }
     #loading { font-style: italic; color: #666; }
-    #debug { margin-top: 2em; background: #fffbe6; padding: 1em; border: 1px solid #ccc; border-radius: 6px; }
-    #debug ul { padding-left: 1.2em; }
+    select { padding: 0.5em; font-size: 1em; margin-top: 1em; }
   </style>
 </head>
 <body>
   <h1>🎵 GitHub Pages 音樂播放器</h1>
   <audio controls></audio>
   <div id="loading">正在載入音樂清單...</div>
-  <h2>播放清單</h2>
-  <div id="playlist"></div>
-    <div id="debug">
-    <h3>除錯資訊</h3>
-    <p><strong>音訊資料夾：</strong> <span id="music-path"></span></p>
-    <p><strong>載入狀態：</strong> <span id="load-status"></span></p>
-    <p><strong>載入的檔案：</strong></p>
-    <ul id="loaded-files"></ul>
-  </div>
 
+  <h2>播放清單</h2>
+  <select id="playlist"></select>
 
   <script>
     const getMusicBase = () => {
@@ -69,41 +59,27 @@
     };
 
     const renderPlaylistUI = (list) => {
-      const container = document.getElementById('playlist');
-      container.innerHTML = '';
+      const select = document.getElementById('playlist');
+      select.innerHTML = '';
+
       list.forEach((url, i) => {
-        const item = document.createElement('div');
-        item.textContent = url.split('/').pop();
-        item.onclick = () => {
-          const audio = document.querySelector('audio');
-          audio.src = url;
-          audio.play();
-        };
-        container.appendChild(item);
+        const option = document.createElement('option');
+        option.value = url;
+        option.textContent = url.split('/').pop();
+        select.appendChild(option);
       });
-    };
 
-    const updateDebugInfo = (base, playlist) => {
-      document.getElementById('music-path').textContent = base;
-      document.getElementById('load-status').textContent = playlist.length
-        ? '✅ 成功載入'
-        : '❌ 找不到音訊檔案';
-
-      const list = document.getElementById('loaded-files');
-      list.innerHTML = '';
-      playlist.forEach(url => {
-        const li = document.createElement('li');
-        li.textContent = url;
-        list.appendChild(li);
-      });
+      select.onchange = () => {
+        const audio = document.querySelector('audio');
+        audio.src = select.value;
+        audio.play();
+      };
     };
 
     const initPlayer = async () => {
       const base = getMusicBase();
       const playlist = await loadPlaylist();
       document.getElementById('loading').style.display = 'none';
-
-      updateDebugInfo(base, playlist);
 
       if (!playlist.length) {
         alert('找不到預設音樂，請確認 music 資料夾是否存在音訊檔案');
