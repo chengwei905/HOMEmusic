@@ -18,6 +18,9 @@
   <select id="playlist"></select>
 
   <script>
+    let playlist = [];
+    let currentIndex = 0;
+
     const getMusicBase = () => {
       const basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
       return basePath + 'music/';
@@ -64,21 +67,35 @@
 
       list.forEach((url, i) => {
         const option = document.createElement('option');
-        option.value = url;
+        option.value = i;
         option.textContent = url.split('/').pop();
         select.appendChild(option);
       });
 
       select.onchange = () => {
-        const audio = document.querySelector('audio');
-        audio.src = select.value;
-        audio.play();
+        currentIndex = parseInt(select.value);
+        playCurrent();
+      };
+    };
+
+    const playCurrent = () => {
+      const audio = document.querySelector('audio');
+      audio.src = playlist[currentIndex];
+      audio.play().catch(() => console.log('Autoplay blocked'));
+
+      document.getElementById('playlist').value = currentIndex;
+    };
+
+    const setupAutoAdvance = () => {
+      const audio = document.querySelector('audio');
+      audio.onended = () => {
+        currentIndex = (currentIndex + 1) % playlist.length;
+        playCurrent();
       };
     };
 
     const initPlayer = async () => {
-      const base = getMusicBase();
-      const playlist = await loadPlaylist();
+      playlist = await loadPlaylist();
       document.getElementById('loading').style.display = 'none';
 
       if (!playlist.length) {
@@ -86,11 +103,9 @@
         return;
       }
 
-      const audio = document.querySelector('audio');
-      audio.src = playlist[0];
-      audio.play().catch(() => console.log('Autoplay blocked'));
-
       renderPlaylistUI(playlist);
+      playCurrent();
+      setupAutoAdvance();
     };
 
     initPlayer();
