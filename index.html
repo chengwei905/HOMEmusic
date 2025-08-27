@@ -1,114 +1,127 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>GitHub Pages 音樂播放器</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>音樂播放器（含 metadata）</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 2em; background: #f9f9f9; }
-    h1, h2 { margin-top: 1em; }
-    #loading { font-style: italic; color: #666; }
-    select { padding: 0.5em; font-size: 1em; margin-top: 1em; }
+    body {
+      font-family: DFKai-SB, sans-serif;
+      background-color: #c0f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    #player-container {
+      background-color: #00a0f4;
+      padding: 20px;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      color: white;
+    }
+    select, audio {
+      width: 100%;
+      margin: 10px 0;
+    }
+    #metadata p {
+      margin: 5px 0;
+    }
   </style>
 </head>
 <body>
-  <h1>🎵 GitHub Pages 音樂播放器</h1>
-  <audio controls></audio>
-  <div id="loading">正在載入音樂清單...</div>
+  <div id="player-container">
+    <h1>🎶音樂播放器</h1>
+    <h2 id="media-title">請選擇曲目</h2>
 
-  <h2>播放清單</h2>
-  <select id="playlist"></select>
+    <div id="metadata">
+      <p align="left"><strong>標題:</strong> <span id="meta-title">-</span></p>
+      <p align="left"><strong>專輯:</strong> <span id="meta-album">-</span></p>
+      <p align="left"><strong>藝術家:</strong> <span id="meta-artist">-</span></p>
+    </div>
+
+    <select id="track-selector"></select>
+    <audio id="audio-player" controls></audio>
+  </div>
 
   <script>
     let playlist = [];
     let currentIndex = 0;
 
-    const getMusicBase = () => {
-      const basePath = window.location.pathname.replace(/\/[^\/]*$/, '/');
-      return basePath + 'music/';
-    };
+    const trackSelector = document.getElementById('track-selector');
+    const audioPlayer = document.getElementById('audio-player');
+    const mediaTitle = document.getElementById('media-title');
 
-    const fetchPlaylistJson = async (base) => {
+    const metaTitle = document.getElementById('meta-title');
+    const metaAlbum = document.getElementById('meta-album');
+    const metaArtist = document.getElementById('meta-artist');
+
+    async function loadPlaylist() {
       try {
-        const res = await fetch(`${base}playlist.json`);
-        if (!res.ok) throw new Error('playlist.json not found');
-        return await res.json();
+        const res = await fetch('music/playlist.json');
+        if (!res.ok) throw new Error('playlist.json 載入失敗');
+        const files = await res.json();
+        playlist = files.map(file => 'music/' + file);
+        renderTrackSelector();
+        playTrack(0);
       } catch (err) {
-        return null;
+        alert('無法載入 playlist.json');
+        console.error(err);
       }
-    };
+    }
 
-    const fetchAutoIndex = async (base) => {
-      try {
-        const res = await fetch(base);
-        const html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        return [...doc.querySelectorAll('a')]
-          .map(a => a.getAttribute('href'))
-          .filter(href => href && href.endsWith('.mp3'))
-          .map(href => base + href);
-      } catch (err) {
-        return [];
-      }
-    };
-
-    const loadPlaylist = async () => {
-      const base = getMusicBase();
-      const jsonList = await fetchPlaylistJson(base);
-      if (jsonList && jsonList.length) return jsonList.map(file => base + file);
-
-      const autoList = await fetchAutoIndex(base);
-      if (autoList.length) return autoList;
-
-      return [];
-    };
-
-    const renderPlaylistUI = (list) => {
-      const select = document.getElementById('playlist');
-      select.innerHTML = '';
-
-      list.forEach((url, i) => {
+    function renderTrackSelector() {
+      trackSelector.innerHTML = '';
+      playlist.forEach((url, i) => {
         const option = document.createElement('option');
         option.value = i;
         option.textContent = url.split('/').pop();
-        select.appendChild(option);
+        trackSelector.appendChild(option);
       });
+      trackSelector.value = 0;
+    }
 
-      select.onchange = () => {
-        currentIndex = parseInt(select.value);
-        playCurrent();
-      };
-    };
+    function playTrack(index) {
+      currentIndex = index;
+      const filePath = playlist[index];
+      audioPlayer.src = filePath;
+      audioPlayer.play();
 
-    const playCurrent = () => {
-      const audio = document.querySelector('audio');
-      audio.src = playlist[currentIndex];
-      audio.play().catch(() => console.log('Autoplay blocked'));
+      mediaTitle.textContent = filePath.split('/').pop();
+      metaTitle.textContent = '-';
+      metaAlbum.textContent = '-';
+      metaArtist.textContent = '-';
 
-      document.getElementById('playlist').value = currentIndex;
-    };
+      fetch(filePath)
+        .then(res => res.blob())
+        .then(blob => {
+          jsmediatags.read(blob, {
+            onSuccess: tag => {
+              const tags = tag.tags;
+              metaTitle.textContent = tags.title || '(無標題)';
+              metaAlbum.textContent = tags.album || '(無專輯)';
+              metaArtist.textContent = tags.artist || '(無藝術家)';
+              if (tags.title) mediaTitle.textContent = tags.title;
+            },
+            onError: err => console.warn('Metadata 讀取失敗', err)
+          });
+        })
+        .catch(err => console.warn('MP3 載入失敗', err));
+    }
 
-    const setupAutoAdvance = () => {
-      const audio = document.querySelector('audio');
-      audio.onended = () => {
-        currentIndex = (currentIndex + 1) % playlist.length;
-        playCurrent();
-      };
-    };
+    trackSelector.addEventListener('change', e => {
+      playTrack(parseInt(e.target.value));
+    });
 
-    const initPlayer = async () => {
-      playlist = await loadPlaylist();
-      document.getElementById('loading').style.display = 'none';
+    audioPlayer.addEventListener('ended', () => {
+      const next = (currentIndex + 1) % playlist.length;
+      trackSelector.value = next;
+      playTrack(next);
+    });
 
-      if (!playlist.length) {
-        alert('找不到預設音樂，請確認 music 資料夾是否存在音訊檔案');
-        return;
-      }
-
-      renderPlaylistUI(playlist);
-      playCurrent();
-      setupAutoAdvance();
-    };
-
-    initPlayer();
+    loadPlaylist();
   </script>
 </body>
 </html>
