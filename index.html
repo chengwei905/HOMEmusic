@@ -1,151 +1,100 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>專業級音樂播放器</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <meta charset="UTF-8">
+  <title>HOMEmusic 播放器</title>
   <style>
-    body {
-      font-family: DFKai-SB, sans-serif;
-      background: linear-gradient(to bottom, #c0f4f4, #e0ffff);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    #player-container {
-      background-color: #00a0f4;
-      padding: 20px;
-      border-radius: 20px;
-      width: 100%;
-      max-width: 400px;
-      text-align: center;
-      color: white;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-    select, audio {
-      width: 100%;
-      margin: 10px 0;
-    }
-    #metadata p {
-      margin: 5px 0;
-      text-align: left;
-    }
-    #cover {
-      width: 100%;
-      max-width: 300px;
-      height: auto;
-      border-radius: 10px;
-      margin-bottom: 10px;
-      object-fit: cover;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
+    body { font-family: sans-serif; background: #f0f0f0; padding: 2em; }
+    #player { background: #fff; padding: 1em; border-radius: 8px; box-shadow: 0 0 10px #ccc; }
+    audio { width: 100%; margin-top: 1em; }
+    select, button { width: 100%; padding: 0.5em; margin-top: 1em; }
   </style>
 </head>
 <body>
-  <div id="player-container">
-    <h1>🎶 音樂播放器</h1>
-    <img id="cover" src="" alt="封面圖" style="display:none;" />
-    <h2 id="media-title">請選擇曲目</h2>
+  <div id="player">
+    <h2>🎵 HOMEmusic 播放器</h2>
 
-    <div id="metadata">
-      <p><strong>標題:</strong> <span id="meta-title">-</span></p>
-      <p><strong>專輯:</strong> <span id="meta-album">-</span></p>
-      <p><strong>藝術家:</strong> <span id="meta-artist">-</span></p>
-    </div>
+    <!-- 播放清單來源選擇 -->
+    <label for="sourceSelector">選擇播放清單格式：</label>
+    <select id="sourceSelector">
+      <option value="json">JSON 播放清單</option>
+      <option value="m3u">M3U 播放清單</option>
+    </select>
 
-    <select id="track-selector"></select>
-    <audio id="audio-player" controls></audio>
+    <!-- 曲目選擇 -->
+    <label for="trackSelector">選擇曲目：</label>
+    <select id="trackSelector"></select>
+
+    <!-- 播放器與控制 -->
+    <audio id="audio" controls></audio>
+    <button onclick="playNext()">下一首 ▶️</button>
   </div>
 
   <script>
     let playlist = [];
-    let currentIndex = 0;
-
-    const trackSelector = document.getElementById('track-selector');
-    const audioPlayer = document.getElementById('audio-player');
-    const mediaTitle = document.getElementById('media-title');
-    const metaTitle = document.getElementById('meta-title');
-    const metaAlbum = document.getElementById('meta-album');
-    const metaArtist = document.getElementById('meta-artist');
-    const coverImage = document.getElementById('cover');
+    let currentTrack = 0;
 
     async function loadPlaylist() {
+      const format = document.getElementById('sourceSelector').value;
+      const path = format === 'json' ? 'music/playlist.json' : 'music/playlist.m3u';
+      format === 'json' ? await loadJSONPlaylist(path) : await loadM3UPlaylist(path);
+    }
+
+    async function loadJSONPlaylist(url) {
       try {
-        const res = await fetch('music/playlist.json');
-        if (!res.ok) throw new Error('playlist.json 載入失敗');
+        const res = await fetch(url);
         const files = await res.json();
         playlist = files.map(file => 'music/' + file);
         renderTrackSelector();
         playTrack(0);
       } catch (err) {
-        alert('無法載入 playlist.json');
-        console.error(err);
+        console.error('載入 JSON 播放清單失敗', err);
+      }
+    }
+
+    async function loadM3UPlaylist(url) {
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+        playlist = lines.map(line => 'music/' + line);
+        renderTrackSelector();
+        playTrack(0);
+      } catch (err) {
+        console.error('載入 M3U 播放清單失敗', err);
       }
     }
 
     function renderTrackSelector() {
-      trackSelector.innerHTML = '';
-      playlist.forEach((url, i) => {
+      const selector = document.getElementById('trackSelector');
+      selector.innerHTML = '';
+      playlist.forEach((track, index) => {
         const option = document.createElement('option');
-        option.value = i;
-        option.textContent = url.split('/').pop();
-        trackSelector.appendChild(option);
+        option.value = index;
+        option.textContent = track.split('/').pop();
+        selector.appendChild(option);
       });
-      trackSelector.value = 0;
+      selector.onchange = () => playTrack(parseInt(selector.value));
     }
 
     function playTrack(index) {
-      currentIndex = index;
-      const filePath = playlist[index];
-      audioPlayer.src = filePath;
-      audioPlayer.play();
-
-      mediaTitle.textContent = filePath.split('/').pop();
-      metaTitle.textContent = '-';
-      metaAlbum.textContent = '-';
-      metaArtist.textContent = '-';
-      coverImage.style.display = 'none';
-      coverImage.src = '';
-
-      fetch(filePath)
-        .then(res => res.blob())
-        .then(blob => {
-          jsmediatags.read(blob, {
-            onSuccess: tag => {
-              const tags = tag.tags;
-              metaTitle.textContent = tags.title || '(無標題)';
-              metaAlbum.textContent = tags.album || '(無專輯)';
-              metaArtist.textContent = tags.artist || '(無藝術家)';
-              if (tags.title) mediaTitle.textContent = tags.title;
-
-              if (tags.picture) {
-                const { data, format } = tags.picture;
-                const byteArray = new Uint8Array(data);
-                const blob = new Blob([byteArray], { type: format });
-                const url = URL.createObjectURL(blob);
-                coverImage.src = url;
-                coverImage.style.display = 'block';
-              }
-            },
-            onError: err => console.warn('Metadata 讀取失敗', err)
-          });
-        })
-        .catch(err => console.warn('MP3 載入失敗', err));
+      currentTrack = index;
+      const audio = document.getElementById('audio');
+      audio.src = playlist[index];
+      audio.play();
+      document.getElementById('trackSelector').value = index;
     }
 
-    trackSelector.addEventListener('change', e => {
-      playTrack(parseInt(e.target.value));
-    });
+    function playNext() {
+      currentTrack = (currentTrack + 1) % playlist.length;
+      playTrack(currentTrack);
+    }
 
-    audioPlayer.addEventListener('ended', () => {
-      const next = (currentIndex + 1) % playlist.length;
-      trackSelector.value = next;
-      playTrack(next);
-    });
-
-    loadPlaylist();
+    // 初始化與切換來源事件
+    window.onload = () => {
+      document.getElementById('sourceSelector').onchange = loadPlaylist;
+      loadPlaylist();
+    };
   </script>
 </body>
 </html>
